@@ -1,0 +1,168 @@
+---
+title: "4th Activity"
+author: "4th Activity on Data"
+date: "18th September 2018"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+# Reading the data
+## clearing the environment variables
+```{r}
+rm(list=ls(all=TRUE))
+```
+
+## Reading the data
+
+```{r}
+data<-read.csv("CustomerData.csv",header=T)
+names(data)
+str(data)
+summary(data)
+```
+
+# Data Preprocessing
+## Processing the data
+
+```{r}
+#removing the CustomerID column
+data$CustomerID <- NULL
+#converting city into factors
+data$City <- as.factor(data$City)
+#checking for any NA or missing values
+sum(is.na(data))
+```
+
+## Spliting the data for training and testing
+
+```{r}
+#sPLITTING THE DATA
+rows=seq(1,nrow(data),1)
+set.seed(123)
+trainRows=sample(rows,(70*nrow(data))/100)
+train=data[trainRows,]
+validation=data[-trainRows,]
+```
+
+## Checking the corrplot
+```{r fig.height= 8, fig.width = 9}
+plot_data <- subset(data, select = -c(FavoriteChannelOfTransaction,FavoriteGame,City))
+str(plot_data)
+
+library(corrplot)
+corrplot(cor(plot_data), method = "number")
+```
+
+# Model Building
+## Building the model
+```{r}
+#model<-lm(TotalRevenueGenerated~City+NoOfChildren+MinAgeofChild+Tenure+FrequencyofPurchase+NoofUnitsPurchased+FrequencyOFPlay+NoOfGamesPlayed+NoOfGamesBought+FavoriteChannelOfTransaction+FavoriteGame,data=train)
+#Or say target~. in formula to include all predictor variables
+model<-lm(formula=TotalRevenueGenerated ~.,data=train)
+summary(model)
+#First check<F-Stat's p-val<<0.05->Model is significant
+```
+
+## Residual Analysis
+
+```{r}
+#Residual analysis
+par(mfrow=c(2,2))
+plot(model)
+#residuals are almost linear there is no patterns in res, but a few outliers are
+```
+
+## Performance analysis of the model
+
+```{r}
+#Let's see the performance of the model1
+#Predictions on train,validation and test data
+model_train_preds<-model$fitted.values #OR
+model_train_preds<-predict(object=model,newdata=train)
+model_validations_preds<-predict(object=model,newdata=validation)
+
+library(DMwR)
+str(train)
+regr.eval(trues=train$TotalRevenueGenerated,preds=model_train_preds)
+regr.eval(trues=validation$TotalRevenueGenerated, preds=model_validations_preds)
+#Decent fit-Not overfitting or underfitting; error is about 20%
+```
+
+# Model 2 
+## Dealing with leverages and removing the outliers
+
+```{r}
+lev=hat(model.matrix(model))#gives all leverages
+plot(lev)
+train[lev>0.2,]
+```
+
+## Calculating cooks distance
+
+```{r}
+cook= cooks.distance(model)
+plot(cook,ylab="Cooks distances")
+max=as.numeric(which.max(cook))
+points(max,cook[max],col='red',pch=19)
+train[max,]
+train<-train[-max,]
+
+#Residual outliers
+
+model2<-lm(TotalRevenueGenerated~.,data=train)
+summary(model2)
+#Predictions on train, validation and test data
+model2_train_preds<-model2$fitted.values #OR
+model2_train_preds<-predict(object=model2,newdata=train)
+model2_validation_preds<-predict(object=model2,newdata=validation)
+
+regr.eval(trues=train$TotalRevenueGenerated,preds=model2_train_preds)
+regr.eval(trues=validation$TotalRevenueGenerated,preds=model2_validation_preds)
+```
+
+# Model 3
+##Multicollinearity check using variance inflation
+
+```{r}
+library(car)
+vif(model2)
+#Ignoring Frequency of purchase and Noofgames Bought as the VIF>10
+model3<-lm(TotalRevenueGenerated~City+NoOfChildren+MinAgeOfChild+ MaxAgeOfChild +Tenure+ NoOfUnitsPurchased + FrequencyOFPlay + NoOfGamesPlayed + FavoriteChannelOfTransaction + FavoriteGame ,data=train)
+summary(model3)
+
+#Let'see the performance of the model3
+#Predictions on train,validation and test data
+model3_train_preds<-model3$fitted.values #OR
+model3_train_preds<-predict(object=model3,newdata=train)
+model3_validation_preds<-predict(object=model3,newdata=validation)
+
+regr.eval(trues=train$TotalRevenueGenerated,preds=model3_train_preds)
+regr.eval(trues=validation$TotalRevenueGenerated,preds=model3_validation_preds)
+#Error got increased
+```
+
+# Model 4
+## Using StepAIC
+
+```{r}
+#Stepwise Regression
+library(MASS)
+model1<-lm(formula=TotalRevenueGenerated ~.,data=train)
+summary(model1)
+step<-stepAIC(model1,direction="both")
+step
+#the model is ignoring NOofGamesPlayed attribute
+
+model4<-lm(formula= TotalRevenueGenerated~City+ NoOfChildren+MinAgeOfChild+ MaxAgeOfChild +Tenure+ NoOfUnitsPurchased + FrequencyOFPlay + NoOfGamesPlayed + FavoriteChannelOfTransaction + FavoriteGame ,data=train)
+summary(model4)
+#Predictions on train,validation and test data
+model4_train_preds<-model4$fitted.values #OR
+model4_train_preds<-predict(object=model4,newdata=train)
+model4_validation_preds<-predict(object=model4,newdata=validation)
+
+regr.eval(trues=train$TotalRevenueGenerated,preds=model4_train_preds)
+regr.eval(trues=validation$TotalRevenueGenerated,preds=model4_validation_preds)
+```
